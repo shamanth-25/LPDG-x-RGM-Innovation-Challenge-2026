@@ -1,0 +1,13 @@
+# Telemetry dataset and parquet storage
+data/
+*.parquet
+
+# Python cache & virtualenvs
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# System files
+.DS_Store
+Thumbs.db
