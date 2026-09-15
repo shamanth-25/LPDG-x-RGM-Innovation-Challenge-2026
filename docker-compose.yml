@@ -1,0 +1,9 @@
+services:
+  pipeline:
+    build: .
+    volumes:
+      - ./data:/app/data:ro
+      - ./:/app/output
+    command: >
+      sh -c "python run_solution.py --data /app/data --out /app/output/predictions.csv &&
+             python validate_submission.py /app/output/predictions.csv"
