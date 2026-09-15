@@ -1,7 +1,9 @@
 services:
   pipeline:
     build: .
+    environment:
+      - PYTHONPATH=/app
     volumes:
       - ./data:/app/data:ro
-      - ./:/app/output
-    command: python run_solution.py --data /app/data --out /app/output/predictions.csv --dynamic-dates
+      - ./:/app
+    command: python run_solution.py --data /app/data --out /app/predictions.csv --dynamic-dates
