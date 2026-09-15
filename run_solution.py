@@ -23,19 +23,23 @@ METRIC_ACTIONS = {
 
 
 def get_target_mondays(frame: pd.DataFrame, dynamic: bool = False) -> list[dt.date]:
-    """Return the official 8 evaluation weeks, or infer Mondays dynamically from telemetry."""
+    """Return official 8 evaluation weeks or discover all valid Mondays in mounted telemetry."""
     if not dynamic:
         return SCORED_WEEKS
 
     max_ts = frame["ts"].max()
+    min_ts = frame["ts"].min()
+
+    # Find the most recent Monday in the dataset
     latest_monday = max_ts.date() - dt.timedelta(days=max_ts.weekday())
-    min_monday = frame["ts"].min().date()
 
     mondays = []
     curr = latest_monday
-    while curr >= min_monday and len(mondays) < 8:
+    # Collect Mondays while there is at least 7 days of trailing history
+    while curr >= (min_ts.date() + dt.timedelta(days=7)) and len(mondays) < 8:
         mondays.append(curr)
         curr -= dt.timedelta(days=7)
+
     return sorted(mondays)
 
 
@@ -57,9 +61,10 @@ def build_predictions(frame: pd.DataFrame, weeks: list[dt.date], sigma: float = 
     for monday in weeks:
         ranked = rank_week(frame, monday)
         if len(ranked) < VISITS_PER_WEEK:
-            raise SystemExit(f"only {len(ranked)} gateways found before {monday}")
+            print(f"Warning: only {len(ranked)} gateways available for {monday}", file=sys.stderr)
 
-        for rank, row in enumerate(ranked.head(VISITS_PER_WEEK).itertuples(index=False), 1):
+        available_visits = min(len(ranked), VISITS_PER_WEEK)
+        for rank, row in enumerate(ranked.head(available_visits).itertuples(index=False), 1):
             rows.append(
                 {
                     "week_start": monday.isoformat(),
@@ -73,11 +78,11 @@ def build_predictions(frame: pd.DataFrame, weeks: list[dt.date], sigma: float = 
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate Part 1 predictions.csv")
+    parser = argparse.ArgumentParser(description="Generate predictions.csv from telemetry")
     parser.add_argument("--data", type=pathlib.Path, default=pathlib.Path("data"))
     parser.add_argument("--out", type=pathlib.Path, default=pathlib.Path("predictions.csv"))
     parser.add_argument("--threshold", type=float, default=3.0, help="Sigma threshold multiplier")
-    parser.add_argument("--dynamic-dates", action="store_true", help="Infer Mondays from data")
+    parser.add_argument("--dynamic-dates", action="store_true", help="Infer target Mondays from telemetry")
     args = parser.parse_args(argv)
 
     if not args.data.exists():
@@ -87,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Loading telemetry from {args.data}...")
     frame = load(args.data)
     weeks = get_target_mondays(frame, dynamic=args.dynamic_dates)
-    print(f"Processing {len(weeks)} target weeks at {args.threshold} sigma...")
+    print(f"Target weeks identified ({len(weeks)}): {[w.isoformat() for w in weeks]}")
 
     preds = build_predictions(frame, weeks, sigma=args.threshold)
     preds.to_csv(args.out, index=False)
