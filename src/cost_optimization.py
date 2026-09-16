@@ -8,6 +8,7 @@ import datetime as dt
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
 
 from baseline_3sigma import load, VISITS_PER_WEEK
 
@@ -16,8 +17,29 @@ COST_PENALTY_WEEK = 600.0
 METRICS = ["offline_duration_sec", "disconnection_cnt", "reboot_cnt"]
 
 
+def derive_empirical_failure_threshold(df: pd.DataFrame) -> float:
+    """Use 1D K-Means clustering to robustly locate the boundary between nominal and degraded states."""
+    expected = df["meters_expected"].replace(0, np.nan)
+    rates = (df["meters_read"] / expected).dropna().values.reshape(-1, 1)
+    
+    kmeans = KMeans(n_clusters=2, random_state=42, n_init=10).fit(rates)
+    if kmeans.cluster_centers_[0] > kmeans.cluster_centers_[1]:
+        fail_label = 1
+        healthy_label = 0
+    else:
+        fail_label = 0
+        healthy_label = 1
+        
+    fail_max = rates[kmeans.labels_ == fail_label].max()
+    healthy_min = rates[kmeans.labels_ == healthy_label].min()
+    
+    threshold = (fail_max + healthy_min) / 2
+    print(f"Empirically derived failure threshold: {threshold:.1%}")
+    return float(threshold)
+
+
 def load_meter_proxy_ground_truth(data_dir: pathlib.Path) -> pd.DataFrame:
-    """Computes proxy ground truth failure state (< 80% collection rate)."""
+    """Computes proxy ground truth failure state using clustered collection rates."""
     meter_file = data_dir / "meter_read_success.csv"
     if not meter_file.exists():
         raise FileNotFoundError(f"Missing {meter_file}")
@@ -26,7 +48,9 @@ def load_meter_proxy_ground_truth(data_dir: pathlib.Path) -> pd.DataFrame:
     df["week_start"] = pd.to_datetime(df["week_start"]).dt.strftime("%Y-%m-%d")
     expected = df["meters_expected"].replace(0, np.nan)
     df["collection_rate"] = df["meters_read"] / expected
-    df["is_faulty"] = (df["collection_rate"] < 0.80).astype(int)
+    
+    threshold = derive_empirical_failure_threshold(df)
+    df["is_faulty"] = (df["collection_rate"] < threshold).astype(int)
     return df[["week_start", "gateway_id", "is_faulty"]].drop_duplicates()
 
 

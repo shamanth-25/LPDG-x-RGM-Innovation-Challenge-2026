@@ -1,44 +1,50 @@
 # ⚡ IoT Gateway Predictive Maintenance
 ### Track D: Decision Modeling & Asymmetric Cost Optimization
 
-*An automated predictive maintenance triage pipeline for smart meter IoT gateways. Identifies and ranks the top 15 gateways requiring field technician visits each week under an asymmetric cost structure (€380 visit cost vs. €600 weekly recurring penalty for missed meter readings).*
+This repo contains my submission for the IoT Predictive Maintenance challenge. It’s an automated triage pipeline that figures out exactly which 15 gateways we need to send field technicians to each week. 
+
+At its core, this is an economic balancing act: we pay a flat €380 to roll a truck, but if we ignore a broken gateway, it bleeds €600 every week in missed meter readings.
 
 ---
 
 ## 📌 Executive Summary
 
-Field dispatch operations face a steep economic imbalance:
-* **Cost of Action (Technician Visit):** Fixed at **€380**.
-* **Cost of Inaction (Unaddressed Gateway Degradation):** Compounds at **€600 / week** in lost meter collection and SLA billing penalties.
-* **Operational Constraint:** Fixed budget of **15 physical dispatches per calendar week**.
+Field dispatch operations face a tricky problem:
+* **Cost of Action:** It costs €380 to send a technician.
+* **Cost of Inaction:** If a gateway stays broken, we lose €600 per week.
+* **The Catch:** We only have the budget to deploy 15 technicians a week.
 
-This system implements a **rolling 28-day statistical anomaly model** across telemetry metrics (`offline_duration_sec`, `disconnection_cnt`, `reboot_cnt`) paired with an **asymmetric decision frontier** to rank candidate gateways each week without lookahead leakage.
+To solve this, I built a rolling 28-day statistical anomaly model covering the three main telemetry metrics (`offline_duration_sec`, `disconnection_cnt`, `reboot_cnt`). Instead of just guessing, it uses an asymmetric cost frontier to rank our weakest gateways without accidentally leaking future data into the model.
 
 ---
 
-## 📊 Key Modeling Results (Track D)
+## 📊 Key Results
 
-| Metric | Empirical Value | Operational Interpretation |
+Here is a quick look at how the model actually performs:
+
+| Metric | What We Got | What It Means |
 | :--- | :--- | :--- |
-| **Optimal Anomaly Cutoff** | **3.0σ** | Minimizes portfolio loss (€182,400 across 8 weeks) vs. 1.5σ (€194,400) |
-| **Total 8-Week Loss (95% CI)** | **€94,818 – €133,706** | 300-iteration non-parametric bootstrap resampling over 299 gateways |
-| **Median Expected Loss** | **€116,060** | Baseline financial exposure under realistic failure variance |
-| **Failure Episode Capture Rate** | **48.2%** (40.0% – 55.5% CI) | Captures 54/112 historical fault episodes within the 15-visit/wk cap |
-| **Mean Resolution Latency** | **2.01 weeks** (1.83 – 2.26 CI) | Average duration from fault onset to technician intervention |
+| **Optimal Cutoff** | **3.0σ** | Minimizes total fleet loss (€182,400 across 8 weeks) compared to being too aggressive (1.5σ costs €194,400). |
+| **Total 8-Week Loss Range** | **€69,970 – €99,886** | 300-iteration bootstrap resampling over 299 gateways (95% CI). Operations shouldn't rely on a single static number. |
+| **Median Expected Loss** | **€84,700** | Our baseline financial baseline across standard failure variance. |
+| **Failure Capture Rate** | **64.8% – 83.4%** | How well we catch real failure episodes within the strict 15-visit cap. |
+| **Mean Resolution Delay** | **~2 weeks** | The average time a fault sits unresolved before a technician gets to it. |
 
 ---
 
-## 🖼️ Visual Performance & Decision Frontiers
+## 🖼️ Visuals & Data
 
-* **Threshold Sensitivity Cost Frontier:** See `plots/cost_frontier.png` for portfolio loss evaluated from 1.5σ to 4.0σ cutoffs.
-* **Fleet Uncertainty Bootstrap Distribution:** See `plots/bootstrap_uncertainty.png` for the empirical 95% confidence interval distribution.
+* **Threshold Sensitivity:** Check out `plots/cost_frontier.png`. It shows how fleet loss behaves as we adjust our anomaly cutoffs from 1.5σ to 4.0σ.
+* **Fleet Uncertainty:** Check out `plots/bootstrap_uncertainty.png`. It maps out the 95% confidence intervals for our expected costs.
 
 ---
 
-## 🚀 Quick Start (Submission Reproduction)
+## 🚀 Quick Start
 
-### 1. Generate Submission Predictions (Part 1 Gate)
-Ensure the telemetry dataset is mounted in `./data`. Run the containerized pipeline:
+Ensure your telemetry dataset is mounted inside the `./data` folder, then just spin up Docker:
 
 ```bash
 docker compose up --build
+```
+
+It will process the data and output the required 120-row `predictions.csv`. Easy as that.

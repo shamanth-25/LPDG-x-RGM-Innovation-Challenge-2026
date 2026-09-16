@@ -1,22 +1,22 @@
 # AI Usage & Attribution
 
-This document details the tools, prompt workflows, and human-in-the-loop verification strategies used throughout this project, explicitly recording real errors introduced by AI suggestions that were caught, debugged, and resolved.
+I used a few AI tools to help speed up some of the scaffolding and math for this project, but they definitely weren't perfect. Here’s a quick breakdown of exactly what I used them for and where I had to step in and fix their mistakes.
 
 ---
 
-## 1. Tools Used & Operational Scope
+## 1. Tools & Scope
 
-* **Primary AI Engines:** OpenAI ChatGPT / Claude / Gemini
-* **Scope of Assistance:**
-  * Initial scaffolding for `Dockerfile` and multi-platform build declarations.
-  * Formulating loss equations for asymmetric financial penalties:
-    $$\text{Total Loss} = (N_{\text{visits}} \times €380) + \sum_{\text{episodes}} (t_{\text{unresolved}} \times €600)$$
-  * Drafting initial structure for markdown documentation and report layouts.
-  * Shell automation templates for Docker commands.
+* **The Stacks Used:** OpenAI ChatGPT, Claude, and Gemini.
+* **What they helped with:**
+  * Setting up the initial scaffolding for the `Dockerfile` and multi-platform build scripts.
+  * Formulating the markdown math blocks for the asymmetric financial penalties.
+  * Generating shell automation templates for the Docker commands.
 
 ---
 
-## 2. Key Prompts Used
+## 2. Key Prompts I Ran
+
+Here are some of the main prompts I used to guide the tools:
 
 * *"Write a Python script that takes gateway telemetry parquet files and aggregates 3-sigma deviations over rolling 7-day windows without lookahead leakage."*
 * *"How do we simulate the trade-off between a fixed €380 truck roll cost and a €600 weekly recurring penalty for missed meter readings under a 15-visit budget cap?"*
@@ -25,26 +25,31 @@ This document details the tools, prompt workflows, and human-in-the-loop verific
 
 ---
 
-## 3. Concrete AI Mistakes Caught and Corrected
+## 3. The Mistakes I Had to Fix
 
-During development, the AI introduced several critical bugs that were identified and corrected through manual testing:
+During development, the AI introduced some fairly critical bugs. I caught these and manually corrected them:
 
 ### Mistake 1: Schema Hallucination (`KeyError: 'rx_bytes', 'tx_bytes'`)
-* **What the AI did:** When generating `src/cost_optimization.py`, the AI assumed standard network telemetry fields and hardcoded `rx_bytes` and `tx_bytes` into the metric list.
-* **Why it failed:** The dataset only contained `offline_duration_sec`, `disconnection_cnt`, `reboot_cnt`, and `ts`. Running the script inside Docker crashed with a fatal `KeyError`.
-* **Correction:** Inspected `data/telemetry` schema directly and constrained the anomaly detection metrics strictly to the 3 real features.
+* **What happened:** When drafting `src/cost_optimization.py`, the AI just assumed standard network telemetry fields and hardcoded `rx_bytes` and `tx_bytes` into the metrics logic.
+* **Why it died:** Our dataset only contains `offline_duration_sec`, `disconnection_cnt`, and `reboot_cnt`. Running it immediately crashed inside Docker with a fatal `KeyError`.
+* **The fix:** I threw out the hallucinated fields and properly mapped the script strictly to the actual schema.
 
 ### Mistake 2: Pandas MultiIndex Merge Crash
-* **What the AI did:** To calculate mean and standard deviation, the AI wrote `base_df.groupby("gateway_id")[metrics].agg(["mean", "std"])` and attempted to merge it directly onto `recent_df`.
-* **Why it failed:** `.agg(["mean", "std"])` produces a 2-level MultiIndex on columns, whereas `recent_df` has single-level columns. Pandas threw `MergeError: Not allowed to merge between different levels`.
-* **Correction:** Explicitly flattened the aggregated column headers into single strings (`f"{col}_{stat}"`) before executing the merge.
+* **What happened:** The AI tried to calculate the mean and standard deviation via `base_df.groupby("gateway_id")[metrics].agg(["mean", "std"])` and then carelessly merged it directly onto a flat dataframe.
+* **Why it died:** `.agg(["mean", "std"])` generates a 2-level MultiIndex in pandas, which blew up with a `MergeError: Not allowed to merge between different levels` when it hit the single-level dataframe.
+* **The fix:** I manually flattened the aggregated column headers into clean, single strings (like `offline_duration_sec_mean`) before executing the merge.
 
-### Mistake 3: Timezone Awareness Mismatch (`InvalidComparison`)
-* **What the AI did:** Sliced timestamps using naive `pd.Timestamp(target_monday)` against `frame["ts"]`.
-* **Why it failed:** Telemetry timestamps in parquet are stored as `datetime64[us, UTC]`. Python raised `TypeError: Cannot compare tz-naive and tz-aware datetime-like objects`.
-* **Correction:** Added explicit UTC timezone localization (`pd.Timestamp(target_monday, tz="UTC")`) to ensure clean comparisons.
+### Mistake 3: Timezone Awareness `InvalidComparison`
+* **What happened:** The AI sliced timestamps using a naive `pd.Timestamp(target_monday)` against `frame["ts"]`.
+* **Why it died:** The telemetry timestamps in our parquet files are stored as timezone-aware UTC (`datetime64[us, UTC]`). Mixing them threw a `TypeError`.
+* **The fix:** Added explicit UTC localization (`tz="UTC"`) to the target limits so the pandas engine could compare them safely.
 
-### Mistake 4: Lookahead Contamination & Hardcoded Date Fragility
-* **What the AI did:** The AI initially chained `validate_submission.py` directly inside `docker-compose.yml` and hardcoded the evaluation dates (`2026-02-02` to `2026-03-23`).
-* **Why it failed:** When live evaluators mount a new month of unseen data with different calendar dates, `validate_submission.py` asserts against the static 8 weeks, causing the container to crash.
-* **Correction:** Decoupled submission validation from the default Docker entrypoint, implemented `--dynamic-dates` to infer Mondays from mounted telemetry, and enforced strict rolling baseline windows $[T - 35\text{d}, T - 7\text{d})$ to prevent data leakage.
+### Mistake 4: Lookahead Contamination & Date Fragility
+* **What happened:** The AI initially chained `validate_submission.py` directly inside `docker-compose.yml` and hardcoded the evaluation dates.
+* **Why it died:** If you mount a fresh month of unseen data to test the pipeline, `validate_submission.py` angrily asserts against those static old weeks and crashes the entire container run.
+* **The fix:** I decoupled the submission validation from the default Docker entrypoint and implemented a `--dynamic-dates` flag. I also enforced strict rolling baseline windows to mathematically prevent future data leakage.
+
+### Mistake 5: Circular Proxy Validation Assumption
+* **What happened:** While drafting the fleet cost simulation, the AI arbitrarily assumed a flat `<80%` meter collection rate was the universal definition of a "broken gateway" and blindly applied the €600 penalty to it.
+* **Why it died (logically):** This violated the core instruction to critically *decide* what a failure actually is. Applying a manufactured static threshold meant the simulation was completely circular—our 3-sigma anomaly model was just being benchmarked on how well it agreed with the AI's invented 80% rule, completely detaching the math from the physical world.
+* **The fix:** I scrapped the assumption entirely. I implemented a proper 1-D K-Means clustering algorithm to mathematically comb through the entire telemetry distribution and locate the exact empirical cutoff dividing normal RF jitter from physical hardware breakdown.
