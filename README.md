@@ -1,8 +1,7 @@
-============================================================
-NEXORA 2026
-LPDG INNOVATION HUB - SELECTION CHALLENGE 2026
-============================================================
-PROJECT OVERVIEW
+# NEXORA 2026
+## LPDG INNOVATION HUB - SELECTION CHALLENGE 2026
+
+### PROJECT OVERVIEW
 
 **Live Demonstration:** [Watch Screen Recording](https://drive.google.com/file/d/12yVNN34_1nH3PRMt8q-DvPKENqY-gc5G/view?usp=sharing)
 
@@ -19,9 +18,7 @@ To solve this, we cannot rely on arbitrary assumptions. We engineered
 a complete pipeline that empirically defines what a failure is, assesses 
 gateway health objectively, and optimizes the financial threshold.
 
-------------------------------------------------------------
-THE FULL PROCESS (HOW IT WORKS)
-------------------------------------------------------------
+## THE FULL PROCESS (HOW IT WORKS)
 
 PHASE 1: DEFINING FAILURE (UNSUPERVISED LEARNING)
 Instead of guessing that severely degraded meter readings imply a broken
@@ -56,9 +53,7 @@ To prove robustness, the pipeline runs 300 non-parametric bootstrap
 resamples to establish 95% Confidence Intervals. This proves our economic
 optimization holds true regardless of the random clustering of failures in time.
 
-------------------------------------------------------------
-QUICK START
-------------------------------------------------------------
+## QUICK START
 
 1. Ensure your telemetry dataset is mounted in:
 
