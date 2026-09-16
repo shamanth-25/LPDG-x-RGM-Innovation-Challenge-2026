@@ -1,8 +1,7 @@
 =====================================================
 NEXORA 2026 - FINAL SUBMISSION
 LPDG INNOVATION HUB - SELECTION CHALLENGE 2026
-===========================================================
-
+=====================================================
 PROJECT OVERVIEW
 
 This submission addresses Track D (Decision Modeling) for the
