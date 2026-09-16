@@ -6,7 +6,7 @@ I used a few AI tools to help speed up some of the scaffolding and math for this
 
 ## 1. Tools & Scope
 
-* **The Stacks Used:** OpenAI ChatGPT, Claude, and Gemini.
+* **The Stacks Used:**Gemini.
 * **What they helped with:**
   * Setting up the initial scaffolding for the `Dockerfile` and multi-platform build scripts.
   * Formulating the markdown math blocks for the asymmetric financial penalties.
