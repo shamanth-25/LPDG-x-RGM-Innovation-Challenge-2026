@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Track D: Cost-frontier simulation and threshold optimization model."""
 
 from __future__ import annotations
 
@@ -18,10 +17,8 @@ METRICS = ["offline_duration_sec", "disconnection_cnt", "reboot_cnt"]
 
 
 def derive_empirical_failure_threshold(df: pd.DataFrame) -> float:
-    """Use 1D K-Means clustering to robustly locate the boundary between nominal and degraded states."""
     expected = df["meters_expected"].replace(0, np.nan)
     rates = (df["meters_read"] / expected).dropna().values.reshape(-1, 1)
-    
     kmeans = KMeans(n_clusters=2, random_state=42, n_init=10).fit(rates)
     if kmeans.cluster_centers_[0] > kmeans.cluster_centers_[1]:
         fail_label = 1
@@ -29,36 +26,28 @@ def derive_empirical_failure_threshold(df: pd.DataFrame) -> float:
     else:
         fail_label = 0
         healthy_label = 1
-        
     fail_max = rates[kmeans.labels_ == fail_label].max()
     healthy_min = rates[kmeans.labels_ == healthy_label].min()
-    
     threshold = (fail_max + healthy_min) / 2
     print(f"Empirically derived failure threshold: {threshold:.1%}")
     return float(threshold)
 
-
 def load_meter_proxy_ground_truth(data_dir: pathlib.Path) -> pd.DataFrame:
-    """Computes proxy ground truth failure state using clustered collection rates."""
     meter_file = data_dir / "meter_read_success.csv"
     if not meter_file.exists():
         raise FileNotFoundError(f"Missing {meter_file}")
-
     df = pd.read_csv(meter_file)
     df["week_start"] = pd.to_datetime(df["week_start"]).dt.strftime("%Y-%m-%d")
     expected = df["meters_expected"].replace(0, np.nan)
     df["collection_rate"] = df["meters_read"] / expected
-    
     threshold = derive_empirical_failure_threshold(df)
     df["is_faulty"] = (df["collection_rate"] < threshold).astype(int)
     return df[["week_start", "gateway_id", "is_faulty"]].drop_duplicates()
 
 
 def simulate_fleet_cost(predictions: pd.DataFrame, ground_truth: pd.DataFrame, target_weeks: list[str]) -> dict:
-    """Evaluates €380 visit costs against compounding €600 weekly penalties."""
     gt_eval = ground_truth[ground_truth["week_start"].isin(target_weeks)].copy()
     gt_sorted = gt_eval.sort_values(["gateway_id", "week_start"])
-
     pred_visits = predictions.groupby("gateway_id")["week_start"].apply(set).to_dict()
     total_visit_cost = len(predictions) * COST_VISIT
 
@@ -105,7 +94,6 @@ def simulate_fleet_cost(predictions: pd.DataFrame, ground_truth: pd.DataFrame, t
 
 
 def rank_week_custom_sigma(frame: pd.DataFrame, target_monday: dt.date, sigma: float) -> pd.DataFrame:
-    """Score gateways using customizable sigma multiplier with flattened columns."""
     if hasattr(frame["ts"].dt, "tz") and frame["ts"].dt.tz is not None:
         t_end = pd.Timestamp(target_monday, tz="UTC")
     else:
@@ -125,7 +113,6 @@ def rank_week_custom_sigma(frame: pd.DataFrame, target_monday: dt.date, sigma: f
     if base_stats.empty or recent_df.empty:
         return pd.DataFrame(columns=["gateway_id", "flagged_hours"])
 
-    # Flatten MultiIndex columns: e.g. offline_duration_sec_mean, offline_duration_sec_std
     base_stats.columns = [f"{col}_{stat}" for col, stat in base_stats.columns]
     base_stats = base_stats.reset_index()
 

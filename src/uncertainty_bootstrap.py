@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Track D: Bootstrap resampling model for fleet uncertainty quantification."""
-
 from __future__ import annotations
 
 import pathlib
